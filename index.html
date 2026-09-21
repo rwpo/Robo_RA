@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Robô das Formas Geométricas 3D</title>
+    
+    <!-- Tailwind CSS para Interface do Usuário -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- A-Frame 3D Engine -->
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <!-- Plugin A-Frame Orbit Controls para Câmera/Toque/Zoom -->
+    <script src="https://unpkg.com/aframe-orbit-controls@1.3.2/dist/aframe-orbit-controls.min.js"></script>
+
+    <style>
+        * {
+            font-family: 'Fredoka', cursive, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0d1117;
+        }
+
+        #scene-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        .interactive-ui {
+            pointer-events: auto;
+        }
+
+        /* Animações e Pulso */
+        @keyframes pulse-glow {
+            0%, 100% { filter: drop-shadow(0 0 10px rgba(250, 204, 21, 0.8)); }
+            50% { filter: drop-shadow(0 0 22px rgba(250, 204, 21, 1)); }
+        }
+
+        .pulse-ui {
+            animation: pulse-glow 2s infinite;
+        }
+
+        /* Confetes da comemoração */
+        .confetti {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            pointer-events: none;
+            animation: fall 3s linear forwards;
+        }
+
+        @keyframes fall {
+            0% { transform: translateY(-5vh) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
+        }
+
+        .a-enter-vr, .a-orientation-modal {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer" class="flex flex-col justify-between p-3 sm:p-4">
+        
+        <!-- CABEÇALHO SUPER COLORIDO -->
+        <header class="interactive-ui flex justify-between items-center bg-slate-900/90 backdrop-blur-md p-3 rounded-2xl border-2 border-cyan-400/50 shadow-xl">
+            <div class="flex items-center gap-2.5">
+                <div class="bg-gradient-to-tr from-yellow-400 to-pink-500 p-2 rounded-xl shadow-lg border border-yellow-200">
+                    <span class="text-2xl">🤖</span>
+                </div>
+                <div>
+                    <h1 class="text-lg sm:text-2xl font-bold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-pink-400 to-cyan-300">
+                        Robô 3D
+                    </h1>
+                    <p class="text-xs text-cyan-200 font-medium">Toque nas peças para montar!</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <div class="bg-white/10 px-3 py-2 rounded-xl border border-white/20 flex items-center gap-1.5">
+                    <span class="text-base">⭐</span>
+                    <span id="score-counter" class="text-base sm:text-lg font-bold text-yellow-300">0 / 16</span>
+                </div>
+                
+                <button onclick="resetGame()" class="interactive-ui bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 active:scale-95 text-white p-2 rounded-xl font-bold border border-pink-300 shadow-md" title="Reiniciar Jogo">
+                    🔄
+                </button>
+            </div>
+        </header>
+
+        <!-- CONTROLES VISUAIS DE ACESSIBILIDADE DE CÂMERA (GIRAR E ZOOM) -->
+        <div class="interactive-ui absolute right-4 top-24 flex flex-col gap-2 z-30">
+            <button onclick="rotateRobot(-30)" class="bg-slate-900/80 hover:bg-slate-800 text-yellow-300 p-2.5 rounded-2xl border border-yellow-400/40 shadow-lg text-lg active:scale-90" title="Girar Esquerda">
+                🔄 ↶
+            </button>
+            <button onclick="rotateRobot(30)" class="bg-slate-900/80 hover:bg-slate-800 text-yellow-300 p-2.5 rounded-2xl border border-yellow-400/40 shadow-lg text-lg active:scale-90" title="Girar Direita">
+                ↷ 🔄
+            </button>
+            <button onclick="zoomRobot(-0.4)" class="bg-slate-900/80 hover:bg-slate-800 text-cyan-300 p-2.5 rounded-2xl border border-cyan-400/40 shadow-lg text-lg font-bold active:scale-90" title="Aproximar Zoom">
+                🔍 +
+            </button>
+            <button onclick="zoomRobot(0.4)" class="bg-slate-900/80 hover:bg-slate-800 text-cyan-300 p-2.5 rounded-2xl border border-cyan-400/40 shadow-lg text-lg font-bold active:scale-90" title="Afastar Zoom">
+                🔍 -
+            </button>
+            <button onclick="resetCameraView()" class="bg-slate-900/80 hover:bg-slate-800 text-pink-300 p-2 rounded-2xl border border-pink-400/40 shadow-lg text-xs font-bold active:scale-90" title="Resetar Visão">
+                🎯 Reset
+            </button>
+        </div>
+
+        <!-- MENSAGEM / DICA DE USO REPOSICIONADA NO CANTO SUPERIOR ESQUERDO -->
+        <div id="hint-banner" class="interactive-ui absolute left-4 top-24 z-30 bg-cyan-900/90 backdrop-blur-md text-cyan-100 text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-2xl border border-cyan-400/50 shadow-lg max-w-[220px] sm:max-w-xs pulse-ui transition-all duration-300">
+            👉 Toque em uma peça no espaço ou nos botões coloridos para montar o robô!
+        </div>
+
+        <!-- BANDEJA INFERIOR DE PEÇAS AUXILIAR -->
+        <footer class="interactive-ui bg-slate-900/90 backdrop-blur-lg p-3 rounded-3xl border-2 border-purple-500/40 shadow-2xl">
+            <div class="flex justify-between items-center mb-1.5 px-2">
+                <span class="text-xs font-bold text-yellow-300 uppercase tracking-wider flex items-center gap-1">
+                    <span>🧩</span> Formas Disponíveis para Toque (16):
+                </span>
+                <span class="text-[10px] text-cyan-200">Arraste para ver todas ➔</span>
+            </div>
+
+            <!-- Lista de botões rápidos para tocar na peça -->
+            <div id="pieces-bar" class="flex items-center gap-2 overflow-x-auto py-1.5 px-1 scrollbar-none min-h-[55px]">
+                <!-- Inserido dinamicamente pelo JS -->
+            </div>
+        </footer>
+    </div>
+
+    <!-- TELA COMEMORATIVA DE VITÓRIA -->
+    <div id="victory-modal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div id="confetti-holder" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+
+        <div class="bg-gradient-to-b from-yellow-300 via-pink-500 to-purple-600 p-1 rounded-3xl border-4 border-yellow-200 shadow-2xl max-w-sm w-full text-center relative overflow-hidden">
+            <div class="bg-slate-900/95 rounded-[22px] p-6 flex flex-col items-center gap-4">
+                
+                <div class="relative">
+                    <div class="text-6xl animate-bounce">🤖</div>
+                    <div class="absolute -top-2 -right-2 text-3xl animate-spin">🌟</div>
+                    <div class="absolute -bottom-2 -left-2 text-4xl animate-pulse">🎉</div>
+                </div>
+
+                <div class="space-y-1">
+                    <h2 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-pink-300 to-cyan-300">
+                        INCRÍVEL!
+                    </h2>
+                    <p class="text-lg font-bold text-yellow-200">
+                        ROBÔ 3D MONTADO!
+                    </p>
+                    <p class="text-xs text-gray-200 px-2">
+                        Você encaixou todas as <strong class="text-cyan-300">16 formas geométricas</strong> perfeitamente! 🚀✨
+                    </p>
+                </div>
+
+                <button onclick="resetGame()" class="w-full bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 active:scale-95 text-slate-900 font-black text-base py-3.5 px-6 rounded-2xl border-2 border-green-200 shadow-xl transition flex items-center justify-center gap-2">
+                    <span>🎮</span>
+                    <span>JOGAR NOVAMENTE</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="scene-container">
+        <a-scene 
+            embedded 
+            vr-mode-ui="enabled: false"
+            renderer="colorManagement: true; antialias: true; alpha: true;">
+            
+            <!-- Iluminação 3D Vibrante -->
+            <a-entity light="type: ambient; color: #FFFFFF; intensity: 1.3"></a-entity>
+            <a-entity light="type: directional; color: #FFF; intensity: 0.9" position="3 5 4"></a-entity>
+
+            <!-- CÂMERA COM CONTROLES ORBITAIS (ZOOM, ROTAÇÃO 360, PAN COM UM OU DOIS DEDOS) -->
+            <a-entity id="camera-rig" position="0 0 0">
+                <a-entity 
+                    id="main-camera" 
+                    camera
+                    position="0 0.3 3.8" 
+                    orbit-controls="
+                        target: 0 0.1 0;
+                        minDistance: 1.8;
+                        maxDistance: 6.0;
+                        initialPosition: 0 0.3 3.8;
+                        enableDamping: true;
+                        dampingFactor: 0.12;
+                        rotateSpeed: 0.8;
+                        zoomSpeed: 1.0;
+                    ">
+                    
+                    <!-- Raycaster preciso acoplado ao ponteiro do toque/mouse -->
+                    <a-entity 
+                        cursor="rayOrigin: mouse" 
+                        raycaster="objects: .clickable, [geometry]">
+                    </a-entity>
+                </a-entity>
+            </a-entity>
+
+            <!-- CONTAINER CENTRAL DO ROBÔ -->
+            <a-entity id="robot-container" position="0 -0.1 0" rotation="0 0 0">
+                
+                <!-- SLOTS FANTASMA DE GUIA TRANSPARENTES -->
+                <a-entity id="ghost-slots-group">
+                    <!-- CABEÇA -->
+                    <a-box id="slot-cabeça" position="0 1.2 0" width="1.2" height="0.8" depth="0.4" color="#3B82F6" wireframe="true" opacity="0.5"></a-box>
+                    <!-- HASTE -->
+                    <a-box id="slot-haste" position="0 1.7 0" width="0.15" height="0.2" depth="0.15" color="#FBBF24" wireframe="true" opacity="0.5"></a-box>
+                    <!-- ANTENA TOPO -->
+                    <a-cone id="slot-topo-antena" position="0 1.95 0" radius-bottom="0.2" height="0.3" segments-radial="3" color="#EC4899" wireframe="true" opacity="0.5"></a-cone>
+
+                    <!-- OMBROS (TRIÂNGULOS) -->
+                    <a-cone id="slot-ombro-esq" position="-0.75 0.7 0" radius-bottom="0.28" height="0.3" segments-radial="3" rotation="0 0 -45" color="#10B981" wireframe="true" opacity="0.5"></a-cone>
+                    <a-cone id="slot-ombro-dir" position="0.75 0.7 0" radius-bottom="0.28" height="0.3" segments-radial="3" rotation="0 0 45" color="#10B981" wireframe="true" opacity="0.5"></a-cone>
+
+                    <!-- PESCOÇO -->
+                    <a-box id="slot-pescoço" position="0 0.75 0" width="0.4" height="0.12" depth="0.3" color="#C084FC" wireframe="true" opacity="0.5"></a-box>
+                    
+                    <!-- CORPO PEITO (QUADRADO) -->
+                    <a-box id="slot-peito" position="0 0.1 0" width="1.1" height="1.1" depth="0.5" color="#A855F7" wireframe="true" opacity="0.5"></a-box>
+
+                    <!-- BRAÇOS -->
+                    <a-box id="slot-braço-esq" position="-0.85 0.25 0" width="0.5" height="0.18" depth="0.25" color="#EF4444" wireframe="true" opacity="0.5"></a-box>
+                    <a-box id="slot-braço-dir" position="0.85 0.25 0" width="0.5" height="0.18" depth="0.25" color="#EF4444" wireframe="true" opacity="0.5"></a-box>
+
+                    <!-- MÃOS (QUADRADOS) -->
+                    <a-box id="slot-mão-esq" position="-1.2 0.25 0" width="0.24" height="0.24" depth="0.24" color="#06B6D4" wireframe="true" opacity="0.5"></a-box>
+                    <a-box id="slot-mão-dir" position="1.2 0.25 0" width="0.24" height="0.24" depth="0.24" color="#06B6D4" wireframe="true" opacity="0.5"></a-box>
+
+                    <!-- PERNAS -->
+                    <a-box id="slot-perna-esq" position="-0.3 -0.75 0" width="0.28" height="0.55" depth="0.28" color="#F97316" wireframe="true" opacity="0.5"></a-box>
+                    <a-box id="slot-perna-dir" position="0.3 -0.75 0" width="0.28" height="0.55" depth="0.28" color="#F97316" wireframe="true" opacity="0.5"></a-box>
+
+                    <!-- PÉS (TRIÂNGULOS) -->
+                    <a-cone id="slot-pé-esq" position="-0.3 -1.15 0" radius-bottom="0.28" height="0.3" segments-radial="3" color="#FACC15" wireframe="true" opacity="0.5"></a-cone>
+                    <a-cone id="slot-pé-dir" position="0.3 -1.15 0" radius-bottom="0.28" height="0.3" segments-radial="3" color="#FACC15" wireframe="true" opacity="0.5"></a-cone>
+                </a-entity>
+
+                <!-- GRUPO DE PEÇAS FIXADAS -->
+                <a-entity id="placed-pieces-3d"></a-entity>
+
+                <!-- GRUPO DE PEÇAS FLUTUANTES REDOR DO ROBÔ -->
+                <a-entity id="floating-pieces-3d"></a-entity>
+
+            </a-entity>
+        </a-scene>
+    </div>
+
+    <script>
+        /* =============================================================
+           ÁUDIO INTERATIVO SENSORIAL
+           ============================================================= */
+        class AudioSystem {
+            constructor() {
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playSnapSound() {
+                this.init();
+                if (!this.ctx) return;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1046.50, this.ctx.currentTime + 0.18);
+
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.18);
+            }
+
+            playVictoryFanfare() {
+                this.init();
+                if (!this.ctx) return;
+
+                const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
+                notes.forEach((freq, idx) => {
+                    setTimeout(() => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+
+                        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.35);
+
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+
+                        osc.start();
+                        osc.stop(this.ctx.currentTime + 0.35);
+                    }, idx * 110);
+                });
+            }
+        }
+
+        const sound = new AudioSystem();
+
+        /* =============================================================
+           DEFINIÇÃO OFICIAL DAS 16 PEÇAS GEOMÉTRICAS 3D
+           ============================================================= */
+        const PECA_DEFINITIONS = [
+            // --- 7 TRIÂNGULOS (Cones de 3 lados = Pirâmides) ---
+            { id: "topo-antena", nome: "Topo Antena", tipo: "triangulo", color: "#EC4899", geom: "cone", params: "radius-bottom: 0.2; height: 0.3; segments-radial: 3", targetPos: "0 1.95 0", targetRot: "0 0 0" },
+            { id: "ombro-esq", nome: "Ombro Esq.", tipo: "triangulo", color: "#10B981", geom: "cone", params: "radius-bottom: 0.28; height: 0.3; segments-radial: 3", targetPos: "-0.75 0.7 0", targetRot: "0 0 -45" },
+            { id: "ombro-dir", nome: "Ombro Dir.", tipo: "triangulo", color: "#10B981", geom: "cone", params: "radius-bottom: 0.28; height: 0.3; segments-radial: 3", targetPos: "0.75 0.7 0", targetRot: "0 0 45" },
+            { id: "pé-esq", nome: "Pé Esquerdo", tipo: "triangulo", color: "#FACC15", geom: "cone", params: "radius-bottom: 0.28; height: 0.3; segments-radial: 3", targetPos: "-0.3 -1.15 0", targetRot: "0 0 0" },
+            { id: "pé-dir", nome: "Pé Direito", tipo: "triangulo", color: "#FACC15", geom: "cone", params: "radius-bottom: 0.28; height: 0.3; segments-radial: 3", targetPos: "0.3 -1.15 0", targetRot: "0 0 0" },
+
+            // --- 3 QUADRADOS (Cubos) ---
+            { id: "peito", nome: "Corpo Peito", tipo: "quadrado", color: "#A855F7", geom: "box", params: "width: 1.1; height: 1.1; depth: 0.5", targetPos: "0 0.1 0", targetRot: "0 0 0" },
+            { id: "mão-esq", nome: "Mão Esquerda", tipo: "quadrado", color: "#06B6D4", geom: "box", params: "width: 0.24; height: 0.24; depth: 0.24", targetPos: "-1.2 0.25 0", targetRot: "0 0 0" },
+            { id: "mão-dir", nome: "Mão Direita", tipo: "quadrado", color: "#06B6D4", geom: "box", params: "width: 0.24; height: 0.24; depth: 0.24", targetPos: "1.2 0.25 0", targetRot: "0 0 0" },
+
+            // --- 6 RETÂNGULOS (Paralelepípedos) ---
+            { id: "cabeça", nome: "Cabeça Robô", tipo: "retangulo", color: "#3B82F6", geom: "box", params: "width: 1.2; height: 0.8; depth: 0.4", targetPos: "0 1.2 0", targetRot: "0 0 0" },
+            { id: "haste", nome: "Haste Antena", tipo: "retangulo", color: "#FBBF24", geom: "box", params: "width: 0.15; height: 0.2; depth: 0.15", targetPos: "0 1.7 0", targetRot: "0 0 0" },
+            { id: "pescoço", nome: "Pescoço", tipo: "retangulo", color: "#C084FC", geom: "box", params: "width: 0.4; height: 0.12; depth: 0.3", targetPos: "0 0.75 0", targetRot: "0 0 0" },
+            { id: "braço-esq", nome: "Braço Esq.", tipo: "retangulo", color: "#EF4444", geom: "box", params: "width: 0.5; height: 0.18; depth: 0.25", targetPos: "-0.85 0.25 0", targetRot: "0 0 0" },
+            { id: "braço-dir", nome: "Braço Dir.", tipo: "retangulo", color: "#EF4444", geom: "box", params: "width: 0.5; height: 0.18; depth: 0.25", targetPos: "0.85 0.25 0", targetRot: "0 0 0" },
+            { id: "perna-esq", nome: "Perna Esq.", tipo: "retangulo", color: "#F97316", geom: "box", params: "width: 0.28; height: 0.55; depth: 0.28", targetPos: "-0.3 -0.75 0", targetRot: "0 0 0" },
+            { id: "perna-dir", nome: "Perna Dir.", tipo: "retangulo", color: "#F97316", geom: "box", params: "width: 0.28; height: 0.55; depth: 0.28", targetPos: "0.3 -0.75 0", targetRot: "0 0 0" }
+        ];
+
+        let placedCount = 0;
+        let remainingPieces = [];
+
+        window.addEventListener('load', () => {
+            initGame();
+        });
+
+        function initGame() {
+            placedCount = 0;
+            updateCounter();
+
+            document.getElementById('placed-pieces-3d').innerHTML = '';
+            document.getElementById('floating-pieces-3d').innerHTML = '';
+            document.getElementById('victory-modal').classList.add('hidden');
+
+            // Reexibir todos os slots transparentes
+            PECA_DEFINITIONS.forEach(p => {
+                const ghost = document.getElementById(`slot-${p.id}`);
+                if (ghost) ghost.setAttribute('visible', 'true');
+            });
+
+            remainingPieces = [...PECA_DEFINITIONS];
+            renderFloating3DPieces();
+            render2DBarPieces();
+        }
+
+        function updateCounter() {
+            document.getElementById('score-counter').innerText = `${placedCount} / ${PECA_DEFINITIONS.length}`;
+        }
+
+        function renderFloating3DPieces() {
+            const container = document.getElementById('floating-pieces-3d');
+            container.innerHTML = '';
+
+            remainingPieces.forEach((peca, idx) => {
+                const angle = (idx / remainingPieces.length) * Math.PI * 2;
+                const radius = 2.1 + (idx % 2 === 0 ? 0.2 : -0.1);
+                const floatX = Math.cos(angle) * radius;
+                const floatY = -0.3 + Math.sin(angle) * 0.7;
+                const floatZ = (Math.sin(angle * 2) * 0.5);
+
+                const entity = document.createElement('a-entity');
+                entity.setAttribute('id', `float-3d-${peca.id}`);
+                entity.setAttribute('class', 'clickable');
+                entity.setAttribute('geometry', `primitive: ${peca.geom}; ${peca.params}`);
+                entity.setAttribute('material', `color: ${peca.color}; roughness: 0.2; metalness: 0.2`);
+                entity.setAttribute('position', `${floatX} ${floatY} ${floatZ}`);
+                entity.setAttribute('rotation', `${Math.random()*40} ${Math.random()*360} 0`);
+
+                // Animação de flutuação leve
+                entity.setAttribute('animation__float', `
+                    property: position; 
+                    to: ${floatX} ${floatY + 0.12} ${floatZ}; 
+                    dir: alternate; 
+                    dur: ${1800 + idx*100}; 
+                    easing: easeInOutQuad; 
+                    loop: true
+                `);
+
+                // EVENTOS SUPORTADOS PARA TOUCH + MOUSE INSTANTÂNEO
+                const handleSelect = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    fitPieceInRobot(peca.id);
+                };
+
+                entity.addEventListener('click', handleSelect);
+                entity.addEventListener('touchstart', handleSelect);
+
+                container.appendChild(entity);
+            });
+        }
+
+        // Renderiza barra de botões 2D fácil
+        function render2DBarPieces() {
+            const bar = document.getElementById('pieces-bar');
+            bar.innerHTML = '';
+
+            remainingPieces.forEach(peca => {
+                const btn = document.createElement('button');
+                btn.id = `btn-bar-${peca.id}`;
+                btn.className = 'interactive-ui flex-none px-3 py-2 rounded-2xl font-bold text-xs flex items-center gap-1.5 border-2 shadow-md transition active:scale-95';
+                btn.style.backgroundColor = peca.color;
+                btn.style.borderColor = '#FFFFFF';
+                btn.style.color = '#FFFFFF';
+
+                let icon = '🔺';
+                if (peca.tipo === 'quadrado') icon = '🟦';
+                if (peca.tipo === 'retangulo') icon = '🟧';
+
+                btn.innerHTML = `<span>${icon}</span> <span>${peca.nome}</span>`;
+
+                const onTouchOrClick = (e) => {
+                    e.preventDefault();
+                    fitPieceInRobot(peca.id);
+                };
+
+                btn.addEventListener('pointerdown', onTouchOrClick);
+                btn.onclick = onTouchOrClick;
+
+                bar.appendChild(btn);
+            });
+        }
+
+        function fitPieceInRobot(pieceId) {
+            sound.init();
+
+            const pecaIndex = remainingPieces.findIndex(p => p.id === pieceId);
+            if (pecaIndex === -1) return;
+
+            const peca = remainingPieces[pecaIndex];
+
+            // 1. Remover peça flutuante e botão
+            const floatElem = document.getElementById(`float-3d-${peca.id}`);
+            if (floatElem && floatElem.parentNode) {
+                floatElem.parentNode.removeChild(floatElem);
+            }
+
+            const btnElem = document.getElementById(`btn-bar-${peca.id}`);
+            if (btnElem) btnElem.remove();
+
+            // 2. Ocultar slot transparente
+            const ghostSlot = document.getElementById(`slot-${peca.id}`);
+            if (ghostSlot) ghostSlot.setAttribute('visible', 'false');
+
+            // 3. Criar a peça fixa e animar encaixe
+            const placedContainer = document.getElementById('placed-pieces-3d');
+            const placedEntity = document.createElement('a-entity');
+            
+            placedEntity.setAttribute('geometry', `primitive: ${peca.geom}; ${peca.params}`);
+            placedEntity.setAttribute('material', `color: ${peca.color}; roughness: 0.15; metalness: 0.25`);
+            placedEntity.setAttribute('position', peca.targetPos);
+            placedEntity.setAttribute('rotation', peca.targetRot);
+            
+            // Pulso de confirmação
+            placedEntity.setAttribute('animation__scale', `
+                property: scale; 
+                from: 1.4 1.4 1.4; 
+                to: 1 1 1; 
+                dur: 300; 
+                easing: easeOutBack
+            `);
+
+            placedContainer.appendChild(placedEntity);
+
+            // Detalhes extras para a cabeça (olhos e boca) e peito do robô
+            if (peca.id === 'cabeça') {
+                placedEntity.insertAdjacentHTML('beforeend', `
+                    <a-sphere position="-0.3 0.1 0.22" radius="0.08" color="#FFFFFF"></a-sphere>
+                    <a-sphere position="-0.3 0.1 0.28" radius="0.04" color="#000000"></a-sphere>
+                    <a-sphere position="0.3 0.1 0.22" radius="0.08" color="#FFFFFF"></a-sphere>
+                    <a-sphere position="0.3 0.1 0.28" radius="0.04" color="#000000"></a-sphere>
+                    <a-box position="0 -0.2 0.22" width="0.4" height="0.1" depth="0.02" color="#FBBF24"></a-box>
+                `);
+            } else if (peca.id === 'peito') {
+                placedEntity.insertAdjacentHTML('beforeend', `
+                    <a-circle position="-0.25 0.25 0.26" radius="0.1" color="#EF4444"></a-circle>
+                    <a-circle position="0.25 0.25 0.26" radius="0.1" color="#3B82F6"></a-circle>
+                    <a-circle position="-0.25 -0.25 0.26" radius="0.1" color="#10B981"></a-circle>
+                    <a-circle position="0.25 -0.25 0.26" radius="0.1" color="#F97316"></a-circle>
+                `);
+            }
+
+            sound.playSnapSound();
+
+            remainingPieces.splice(pecaIndex, 1);
+            placedCount++;
+            updateCounter();
+
+            const banner = document.getElementById('hint-banner');
+            banner.innerText = `✨ Encaixou: ${peca.nome}! Muito bem! ✨`;
+
+            if (placedCount === PECA_DEFINITIONS.length) {
+                setTimeout(() => {
+                    triggerVictory();
+                }, 400);
+            }
+        }
+
+        /* =============================================================
+           CONTROLES AUXILIARES DE NAVEGAÇÃO / ROTAÇÃO / ZOOM
+           ============================================================= */
+        function rotateRobot(deg) {
+            const robot = document.getElementById('robot-container');
+            const currentRot = robot.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
+            robot.setAttribute('rotation', `${currentRot.x} ${currentRot.y + deg} ${currentRot.z}`);
+        }
+
+        function zoomRobot(delta) {
+            const cam = document.getElementById('main-camera');
+            const orbit = cam.components['orbit-controls'];
+            if (orbit) {
+                const currentDist = orbit.controls.getDistance();
+                const newDist = Math.max(1.8, Math.min(6.0, currentDist + delta));
+                orbit.controls.object.position.multiplyScalar(newDist / currentDist);
+                orbit.controls.update();
+            }
+        }
+
+        function resetCameraView() {
+            const robot = document.getElementById('robot-container');
+            robot.setAttribute('rotation', '0 0 0');
+
+            const cam = document.getElementById('main-camera');
+            const orbit = cam.components['orbit-controls'];
+            if (orbit) {
+                orbit.controls.reset();
+            }
+        }
+
+        /* =============================================================
+           CELEBRAÇÃO DE VITÓRIA
+           ============================================================= */
+        function triggerVictory() {
+            sound.playVictoryFanfare();
+            document.getElementById('victory-modal').classList.remove('hidden');
+
+            // Gira o robô alegremente
+            const robot = document.getElementById('robot-container');
+            robot.setAttribute('animation__spin', 'property: rotation; to: 0 360 0; dur: 5000; easing: linear; loop: true');
+
+            // Lança confetes festivos
+            const holder = document.getElementById('confetti-holder');
+            holder.innerHTML = '';
+            const colors = ['#FF597B', '#FBBF24', '#34D399', '#60A5FA', '#A855F7', '#F472B6'];
+
+            for (let i = 0; i < 75; i++) {
+                const conf = document.createElement('div');
+                conf.className = 'confetti';
+                conf.style.left = `${Math.random() * 100}%`;
+                conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                conf.style.animationDelay = `${Math.random() * 2}s`;
+                conf.style.animationDuration = `${2 + Math.random() * 2}s`;
+                conf.style.borderRadius = Math.random() > 0.5 ? '50%' : '3px';
+                holder.appendChild(conf);
+            }
+        }
+
+        function resetGame() {
+            const robot = document.getElementById('robot-container');
+            robot.removeAttribute('animation__spin');
+            robot.setAttribute('rotation', '0 0 0');
+
+            initGame();
+        }
+    </script>
+</body>
+</html>
